@@ -17,7 +17,7 @@ def extract_text_from_pdf(file_path):
 
 # Load HuggingFace sentiment pipeline
 sentiment_pipeline = pipeline(
-    "sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest"
+    "sentiment-analysis", model="nlptown/bert-base-multilingual-uncased-sentiment"
 )
 
 pdf_folder = "reports"
