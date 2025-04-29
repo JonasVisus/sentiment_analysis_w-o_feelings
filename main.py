@@ -1,12 +1,20 @@
 import os
 import fitz  # PyMuPDF
 import pandas as pd
+import re
 from transformers import pipeline
-
-# Sentiment analysis of multiple PDF reports using HuggingFace Transformers
+from transformers import AutoTokenizer
+from collections import Counter
+from csrd_buzzwords.py import csrd_buzzwords
 
 
 def extract_text_from_pdf(file_path):
+    """Extracts text from a PDF file using PyMuPDF.
+    Args:
+        file_path: path to the PDF file
+    Returns:
+        text: text extracted from the PDF file
+    """
     doc = fitz.open(file_path)
     text = ""
     for page in doc:
@@ -15,9 +23,48 @@ def extract_text_from_pdf(file_path):
     return text
 
 
+def split_into_token_chunks(text, max_tokens=512):
+    """Splits text into chunks of max_tokens using the tokenizer.
+    Args:
+        tokenizer: The tokenizer to use for splitting.
+        max_tokens: Maximum number of tokens per chunk.
+    Returns:
+        List of tokenized chunks as text.
+    """
+    # Tokenize the text into token IDs
+    tokens = tokenizer.encode(text, add_special_tokens=False)
+    # Split the tokens into chunks of max_tokens
+    chunks = [tokens[i : i + max_tokens] for i in range(0, len(tokens), max_tokens)]
+    # Decode each chunk back into text
+    return [tokenizer.decode(chunk, skip_special_tokens=True) for chunk in chunks]
+
+
+def count_csrd_terms(text, seeds):
+    """Counts occurrences of CSRD terms in the text.
+    Args:
+        text: text to search for CSRD terms
+        seeds: list of CSRD terms to count
+    Returns:
+        int: total count of CSRD terms in the text
+    """
+    text = text.lower()
+    counts = Counter()
+    for seed in seeds:
+        counts[seed] = len(re.findall(r"\b" + re.escape(seed) + r"\b", text))
+    return sum(counts.values())
+
+
+# -------------------------------------------------------------------------------
+# Sentiment analysis of multiple PDF reports using HuggingFace Transformers
+# -------------------------------------------------------------------------------
+
 # Load HuggingFace sentiment pipeline
 sentiment_pipeline = pipeline(
     "sentiment-analysis", model="nlptown/bert-base-multilingual-uncased-sentiment"
+)
+# Load the tokenizer for the sentiment model
+tokenizer = AutoTokenizer.from_pretrained(
+    "nlptown/bert-base-multilingual-uncased-sentiment"
 )
 
 pdf_folder = "reports"
@@ -31,47 +78,31 @@ if os.path.isdir(pdf_folder):
 
             try:
                 text = extract_text_from_pdf(file_path)
-                # Optional: Split text into 512-token chunks if very long
-                chunks = [text[i : i + 2000] for i in range(0, len(text), 2000)]
+                csrd_count = count_csrd_terms(text, csrd_seeds)
+                # Split text into 512-token chunks for HuggingFace model
+                chunks = split_into_token_chunks(text, max_tokens=512)
 
                 sentiments = []
                 for chunk in chunks:
-                    result = sentiment_pipeline(chunk[:512])[0]  # Limit to 512 tokens
+                    result = sentiment_pipeline([chunk[:512]])[0]
                     sentiments.append(result)
 
-                # Calculate average scores for each sentiment
-                positive_scores = [
-                    s["score"] for s in sentiments if s["label"] == "POSITIVE"
+                # Calculate average star rating
+                star_scores = [
+                    int(s["label"].split()[0]) * s["score"] for s in sentiments
                 ]
-                negative_scores = [
-                    s["score"] for s in sentiments if s["label"] == "NEGATIVE"
-                ]
-                neutral_scores = [
-                    s["score"] for s in sentiments if s["label"] == "NEUTRAL"
-                ]
-
-                avg_positive = (
-                    round(sum(positive_scores) / len(positive_scores), 3)
-                    if positive_scores
-                    else 0
-                )
-                avg_negative = (
-                    round(sum(negative_scores) / len(negative_scores), 3)
-                    if negative_scores
-                    else 0
-                )
-                avg_neutral = (
-                    round(sum(neutral_scores) / len(neutral_scores), 3)
-                    if neutral_scores
-                    else 0
+                total_score = sum(
+                    [s["score"] for s in sentiments]
+                )  # Summe aller Scores
+                avg_stars = (
+                    round(sum(star_scores) / total_score, 2) if total_score > 0 else 0
                 )
 
                 results.append(
                     {
                         "File": filename,
-                        "Positive Score": avg_positive,
-                        "Negative Score": avg_negative,
-                        "Neutral Score": avg_neutral,
+                        "Average Stars": avg_stars,
+                        "CSRD Terms": csrd_count,
                     }
                 )
 
@@ -85,6 +116,8 @@ else:
 # Ergebnisse als DataFrame anzeigen und vergleichen
 df = pd.DataFrame(results)
 print("\n=== Comparing reports ===")
-print(df.sort_values(by=["Positive Score"], ascending=False))
+print(df.sort_values(by=["Average Stars"], ascending=False))
 
 df.to_excel("sentiment_comparison_reports.xlsx", index=False)
+
+print(sentiment_pipeline("This is a positive sentiment test")[0])
