@@ -1,6 +1,6 @@
 # source: https://onlinelibrary.wiley.com/doi/10.1111/1475-679X.12575 (Global Evolution of Environmental and Social Disclosure in Annual Reports - Lin et al.)
 
-seed_words = [
+csrd_seeds = [
     "carbon footprint",
     "co2 emission",
     "climate change",
@@ -55,7 +55,7 @@ seed_words = [
     "bribery",
 ]
 
-representative_words = [
+csrd_words = [
     "emission",
     "climate",
     "climate change",

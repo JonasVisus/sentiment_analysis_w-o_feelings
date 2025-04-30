@@ -5,7 +5,10 @@ import re
 from transformers import pipeline
 from transformers import AutoTokenizer
 from collections import Counter
-from csrd_buzzwords.py import csrd_buzzwords
+from csrd_buzzwords import (
+    csrd_seeds,
+    csrd_words,
+)  # Importing CSRD buzzwords and seeds from separate file
 
 
 def extract_text_from_pdf(file_path):
@@ -33,23 +36,23 @@ def split_into_token_chunks(text, max_tokens=512):
     """
     # Tokenize the text into token IDs
     tokens = tokenizer.encode(text, add_special_tokens=False)
-    # Split the tokens into chunks of max_tokens
+
     chunks = [tokens[i : i + max_tokens] for i in range(0, len(tokens), max_tokens)]
     # Decode each chunk back into text
     return [tokenizer.decode(chunk, skip_special_tokens=True) for chunk in chunks]
 
 
-def count_csrd_terms(text, seeds):
+def count_csrd_terms(text, terms):
     """Counts occurrences of CSRD terms in the text.
     Args:
         text: text to search for CSRD terms
-        seeds: list of CSRD terms to count
+        terms: list of CSRD terms to count
     Returns:
         int: total count of CSRD terms in the text
     """
     text = text.lower()
     counts = Counter()
-    for seed in seeds:
+    for seed in terms:
         counts[seed] = len(re.findall(r"\b" + re.escape(seed) + r"\b", text))
     return sum(counts.values())
 
@@ -78,7 +81,8 @@ if os.path.isdir(pdf_folder):
 
             try:
                 text = extract_text_from_pdf(file_path)
-                csrd_count = count_csrd_terms(text, csrd_seeds)
+                csrd_seed_count = count_csrd_terms(text, csrd_seeds)
+                csrd_word_count = count_csrd_terms(text, csrd_words)
                 # Split text into 512-token chunks for HuggingFace model
                 chunks = split_into_token_chunks(text, max_tokens=512)
 
@@ -91,9 +95,7 @@ if os.path.isdir(pdf_folder):
                 star_scores = [
                     int(s["label"].split()[0]) * s["score"] for s in sentiments
                 ]
-                total_score = sum(
-                    [s["score"] for s in sentiments]
-                )  # Summe aller Scores
+                total_score = sum([s["score"] for s in sentiments])
                 avg_stars = (
                     round(sum(star_scores) / total_score, 2) if total_score > 0 else 0
                 )
@@ -102,7 +104,8 @@ if os.path.isdir(pdf_folder):
                     {
                         "File": filename,
                         "Average Stars": avg_stars,
-                        "CSRD Terms": csrd_count,
+                        "CSRD Seeds": csrd_seed_count,
+                        "CSRD Reprasentative Terms": csrd_word_count,
                     }
                 )
 
