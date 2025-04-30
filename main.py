@@ -8,10 +8,7 @@ from collections import Counter
 from csrd_buzzwords import csrd_seeds, csrd_words
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
-
-os.environ["OPENAI_API_KEY"] = (
-    "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"
-)
+from secret_keys import OPENAI_API_KEY
 
 
 def extract_text_from_pdf(file_path):
@@ -100,6 +97,10 @@ def semantic_chunker(text, max_tokens=512):
 # -------------------------------------------------------------------------------
 # Sentiment analysis of multiple PDF reports using HuggingFace Transformers
 # -------------------------------------------------------------------------------
+
+# Set OpenAI API key from secrets.py
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+
 
 # Load HuggingFace sentiment pipeline
 sentiment_pipeline = pipeline(
